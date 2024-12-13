@@ -1,0 +1,15 @@
+{
+    "require": {
+        "easyrdf/easyrdf": "^1.1",
+        "semsol/arc2": "^2.5",
+        "symfony/dom-crawler": "^5.4",
+        "symfony/css-selector": "^5.4",
+        "symfony/http-client": "^5.4"
+    },
+    "autoload": {
+        "psr-4": {
+            "Lib\\": "lib/",
+            "Models\\": "models/"
+        }
+    }
+}
