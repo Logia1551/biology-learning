@@ -1,0 +1,125 @@
+name: CI with MySQL
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root  # Password root
+          MYSQL_DATABASE: biology_learning  # Nama database
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -u root --password=root"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=3
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: 8.1
+
+      - name: Install MySQL client
+        run: sudo apt-get install -y default-mysql-client
+
+      - name: Wait for MySQL
+        run: |
+          for i in {1..10}; do
+            if mysqladmin ping -h 127.0.0.1 -u root --password=root; then
+              echo "MySQL is ready"
+              break
+            fi
+            echo "Waiting for MySQL..."
+            sleep 5
+          done
+
+      - name: Create database schema
+        run: |
+          mysql -h 127.0.0.1 -u root --password=root -e "
+          $(cat <<EOF
+          CREATE DATABASE IF NOT EXISTS biology_learning;
+          USE biology_learning;
+
+          -- Create users table
+          CREATE TABLE users (
+              id INT PRIMARY KEY AUTO_INCREMENT,
+              username VARCHAR(50) NOT NULL UNIQUE,
+              password VARCHAR(255) NOT NULL,
+              role VARCHAR(20) NOT NULL
+          );
+
+          -- Create biology_content table
+          CREATE TABLE biology_content (
+              id INT PRIMARY KEY AUTO_INCREMENT,
+              title VARCHAR(255) NOT NULL,
+              description TEXT,
+              video_url VARCHAR(255),
+              topic VARCHAR(100),
+              original_url VARCHAR(255),
+              created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          );
+
+          -- Create courses table
+          CREATE TABLE courses (
+              id INT PRIMARY KEY AUTO_INCREMENT,
+              title VARCHAR(255) NOT NULL,
+              description TEXT,
+              video_url VARCHAR(255),
+              meeting_number INT,
+              teacher_id INT,
+              duration INT,
+              author VARCHAR(100),
+              grade VARCHAR(50),
+              topic VARCHAR(100),
+              subtopic VARCHAR(100),
+              competency TEXT,
+              FOREIGN KEY (teacher_id) REFERENCES users(id)
+          );
+
+          -- Create questions table
+          CREATE TABLE questions (
+              id INT PRIMARY KEY AUTO_INCREMENT,
+              course_id INT,
+              question_text TEXT NOT NULL,
+              type VARCHAR(50),
+              created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+              content_id INT,
+              keywords TEXT,
+              FOREIGN KEY (course_id) REFERENCES courses(id),
+              FOREIGN KEY (content_id) REFERENCES biology_content(id)
+          );
+
+          -- Create student_answers table
+          CREATE TABLE student_answers (
+              id INT PRIMARY KEY AUTO_INCREMENT,
+              student_id INT,
+              question_id INT,
+              answer_text TEXT,
+              score DECIMAL(5,2),
+              submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+              FOREIGN KEY (student_id) REFERENCES users(id),
+              FOREIGN KEY (question_id) REFERENCES questions(id)
+          );
+
+          -- Add indexes for better performance
+          CREATE INDEX idx_biology_content_topic ON biology_content(topic);
+          CREATE INDEX idx_courses_topic ON courses(topic);
+          CREATE INDEX idx_questions_course ON questions(course_id);
+          CREATE INDEX idx_student_answers_student ON student_answers(student_id);
+          CREATE INDEX idx_student_answers_question ON student_answers(question_id);
+          EOF
+          )
+          "
